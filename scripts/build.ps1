@@ -23,4 +23,7 @@ if (!$InnoCompiler) {
 if (!$InnoCompiler) { throw 'Install Inno Setup 6, or run scripts/get-build-tools.ps1, then build again.' }
 & $InnoCompiler ('/DRepoRoot=' + $repoRoot) (Join-Path $repoRoot 'installer\Auto-Hotkeys.iss')
 if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed' }
-Get-ChildItem -LiteralPath $distDir -Filter '*.exe' | ForEach-Object { Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256 | ForEach-Object { $_.Hash.ToLowerInvariant() + '  ' + (Split-Path -Leaf $_.Path) } } | Set-Content -LiteralPath (Join-Path $distDir 'SHA256SUMS.txt') -Encoding ascii
+$versionLine = Get-Content -LiteralPath (Join-Path $repoRoot 'installer\Auto-Hotkeys.iss') | Where-Object { $_ -match '^#define AppVersion "([0-9.]+)"$' }
+if (!$versionLine -or $versionLine -notmatch '^#define AppVersion "([0-9.]+)"$') { throw 'Installer version is missing' }
+$installer = Join-Path $distDir ('Auto-Hotkeys-Setup-' + $Matches[1] + '.exe')
+Get-FileHash -LiteralPath $installer -Algorithm SHA256 | ForEach-Object { $_.Hash.ToLowerInvariant() + '  ' + (Split-Path -Leaf $_.Path) } | Set-Content -LiteralPath (Join-Path $distDir 'SHA256SUMS.txt') -Encoding ascii

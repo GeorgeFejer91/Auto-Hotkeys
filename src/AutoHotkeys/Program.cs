@@ -11,7 +11,7 @@ using System.Windows.Forms;
 [assembly: AssemblyDescription("Windows hotkey actions in the background")]
 [assembly: AssemblyCompany("George Fejer")]
 [assembly: AssemblyProduct("Auto-Hotkeys")]
-[assembly: AssemblyVersion("1.0.0.0")]
+[assembly: AssemblyVersion("1.1.0.0")]
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("AutoHotkeys.Tests")]
 
 namespace AutoHotkeys
@@ -51,7 +51,7 @@ namespace AutoHotkeys
                 {
                     if (!owner)
                     {
-                        if (!args.Contains("--background")) Signal(OpenEventName);
+                        if (ShouldShowWindow(args)) Signal(OpenEventName);
                         return 0;
                     }
                     try
@@ -62,7 +62,7 @@ namespace AutoHotkeys
                         Application.SetCompatibleTextRenderingDefault(false);
                         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
                         Application.ThreadException += delegate(object s, ThreadExceptionEventArgs e) { AppPaths.Log("UI error: " + e.Exception); };
-                        using (HotkeyApplication app = new HotkeyApplication(!args.Contains("--background")))
+                        using (HotkeyApplication app = new HotkeyApplication(ShouldShowWindow(args)))
                             Application.Run(app);
                     }
                     finally { mutex.ReleaseMutex(); }
@@ -72,11 +72,13 @@ namespace AutoHotkeys
             catch (Exception ex)
             {
                 AppPaths.Log("Startup error: " + ex);
-                if (!args.Contains("--background") && !args.Contains("--prepare-uninstall") && !args.Any(a => a.StartsWith("--configure-autostart=")))
+                if (ShouldShowWindow(args))
                     MessageBox.Show(ex.Message, "Auto-Hotkeys could not start", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return 1;
             }
         }
+
+        internal static bool ShouldShowWindow(string[] args) { return args.Contains("--show"); }
 
         private static void Signal(string name)
         {

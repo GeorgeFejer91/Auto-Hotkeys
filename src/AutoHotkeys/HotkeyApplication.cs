@@ -13,6 +13,7 @@ namespace AutoHotkeys
         private readonly EventWaitHandle openEvent, stopEvent;
         private readonly System.Windows.Forms.Timer events;
         private readonly ToolStripMenuItem startupMenu;
+        private bool disposed;
 
         internal HotkeyApplication(bool show)
         {
@@ -60,7 +61,11 @@ namespace AutoHotkeys
             events.Start();
             AppPaths.Log("Auto-Hotkeys ready. PID=" + System.Diagnostics.Process.GetCurrentProcess().Id);
             if (show) ShowWindow();
-            if (startupError != null) form.ShowError("Could not set automatic startup: " + startupError);
+            if (startupError != null)
+            {
+                form.RecordActivity("Could not set automatic startup: " + startupError);
+                if (show) form.ShowError("Could not set automatic startup: " + startupError);
+            }
         }
 
         private void SetStartup(bool on)
@@ -86,8 +91,9 @@ namespace AutoHotkeys
         private void ShowWindow() { form.Show(); form.WindowState = FormWindowState.Normal; form.Activate(); Native.SetForegroundWindow(form.Handle); }
         protected override void Dispose(bool disposing)
         {
-            if (disposing)
+            if (disposing && !disposed)
             {
+                disposed = true;
                 events.Stop(); events.Dispose();
                 openEvent.Dispose(); stopEvent.Dispose();
                 manager.Dispose();

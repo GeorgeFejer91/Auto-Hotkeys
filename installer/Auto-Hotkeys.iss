@@ -1,7 +1,7 @@
 #ifndef RepoRoot
   #define RepoRoot ".."
 #endif
-#define AppVersion "1.0.0"
+#define AppVersion "1.1.0"
 
 [Setup]
 AppId={{BEB71C57-9EA2-4C04-B03B-619C5A1B2F3F}
@@ -42,7 +42,7 @@ Name: "{userprograms}\Auto-Hotkeys"; Filename: "{app}\Auto-Hotkeys.exe"
 Filename: "{app}\Auto-Hotkeys.exe"; Parameters: "--configure-autostart=on"; Tasks: autostart; Flags: runhidden waituntilterminated
 Filename: "{app}\Auto-Hotkeys.exe"; Parameters: "--configure-autostart=off"; Tasks: not autostart; Flags: runhidden waituntilterminated
 Filename: "{app}\Auto-Hotkeys.exe"; Parameters: "--background"; Flags: nowait runhidden
-Filename: "{app}\Auto-Hotkeys.exe"; Description: "Open Auto-Hotkeys"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\Auto-Hotkeys.exe"; Parameters: "--show"; Description: "Open Auto-Hotkeys settings"; Flags: nowait postinstall skipifsilent unchecked
 
 [UninstallRun]
 Filename: "{app}\Auto-Hotkeys.exe"; Parameters: "--prepare-uninstall"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveAutoHotkeysStartup"

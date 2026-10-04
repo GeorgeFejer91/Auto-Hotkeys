@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Linq;
 using System.Xml;
 using System.Windows.Forms;
 using AutoHotkeys;
@@ -17,6 +18,9 @@ internal static class Tests
         AppPaths.StateDirectory = testDirectory;
         try
         {
+            Assert(!Program.ShouldShowWindow(new string[0]), "Normal launch stays in the background");
+            Assert(!Program.ShouldShowWindow(new[] { "--background" }), "Startup launch stays in the background");
+            Assert(Program.ShouldShowWindow(new[] { "--show" }), "Explicit show opens the management window");
             Assert(Settings.Load().AutoStart, "Fresh installation defaults to autostart On");
             Settings settings = Settings.Load();
             settings.AutoStart = false;
@@ -62,11 +66,71 @@ internal static class Tests
                 }
             }
             Assert(ActionCatalog.Create().Count == 1 && ActionCatalog.Create()[0].Id == "screenshot.rectangle.clipboard", "Catalog exposes the initial screenshot action");
+            CheckStretchLayout();
             Console.WriteLine("Passed " + checks + " checks.");
             return 0;
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
         finally { Directory.Delete(testDirectory,true); }
+    }
+
+    private static void CheckStretchLayout()
+    {
+        Settings settings = new Settings();
+        settings.DisabledActions.Add("screenshot.rectangle.clipboard");
+        using (HotkeyManager manager = new HotkeyManager(settings))
+        using (MainForm form = new MainForm(manager, settings))
+        {
+            IntPtr handle = form.Handle;
+            form.ShowInTaskbar = false;
+            form.Show();
+            TableLayoutPanel shell = (TableLayoutPanel)form.Controls[0];
+            int compactGap = 0;
+            foreach (Size size in new[] { new Size(640,440), new Size(730,520), new Size(1200,440), new Size(640,900), new Size(1200,900) })
+            {
+                form.ClientSize = size;
+                form.PerformLayout(); shell.PerformLayout();
+                Assert(shell.Controls.Cast<Control>().All(control => control.Left >= 0 && control.Top >= 0 && control.Right <= shell.ClientSize.Width && control.Bottom <= shell.ClientSize.Height), "All native groups fit " + size.Width + "x" + size.Height);
+                FlowLayoutPanel footer = (FlowLayoutPanel)shell.GetControlFromPosition(0,10);
+                Assert(footer.Controls.Cast<Control>().Where(control => control.Visible).All(control => control.Right <= footer.ClientSize.Width && control.Bottom <= footer.ClientSize.Height), "Footer actions fit " + size.Width + "x" + size.Height);
+                Control[] groups = shell.Controls.Cast<Control>().ToArray();
+                Assert(groups.All(first => groups.All(second => first == second || !first.Bounds.IntersectsWith(second.Bounds))), "Groups do not overlap " + size.Width + "x" + size.Height);
+                using (Graphics canvas = form.CreateGraphics())
+                    Assert(shell.Controls.OfType<Label>().All(label => TextRenderer.MeasureText(canvas,label.Text,label.Font,new Size(label.ClientSize.Width,int.MaxValue),TextFormatFlags.WordBreak | TextFormatFlags.NoPadding).Height <= label.ClientSize.Height), "Primary instructions are fully visible " + size.Width + "x" + size.Height);
+                Assert(!shell.AutoScroll && shell.VerticalScroll.Visible == false && shell.HorizontalScroll.Visible == false, "Stretch shell has no scrollbar at " + size.Width + "x" + size.Height);
+                int gap = shell.GetRowHeights()[2];
+                if (size == new Size(640,440)) compactGap = gap;
+                if (size == new Size(640,900)) Assert(gap > compactGap, "Extra height increases spacing between control groups");
+                if (size == new Size(1200,900)) Assert(form.Font.SizeInPoints > 10, "Type grows when width and height both permit it");
+                if (size == new Size(1200,440)) Assert(form.Font.SizeInPoints == 10, "Wide short windows keep readable compact type");
+                string renderDirectory = Environment.GetEnvironmentVariable("AUTO_HOTKEYS_LAYOUT_EVIDENCE");
+                if (!string.IsNullOrEmpty(renderDirectory))
+                {
+                    Directory.CreateDirectory(renderDirectory);
+                    using (Bitmap rendered = new Bitmap(shell.Width,shell.Height))
+                    {
+                        shell.DrawToBitmap(rendered,new Rectangle(Point.Empty,rendered.Size));
+                        rendered.Save(Path.Combine(renderDirectory,"layout-" + size.Width + "x" + size.Height + ".png"),ImageFormat.Png);
+                    }
+                }
+            }
+            for (int i = 0; i < 10; i++) form.RecordActivity("Result " + i + " with a long complete message that remains available through Activity history.");
+            ListBox recent = (ListBox)shell.GetControlFromPosition(0,7);
+            Assert(recent.Items.Count == 3, "Main panel bounds recent activity; full history has its own detail view");
+            for (int i = 0; i < 6; i++) manager.Entries.Add(new HotkeyEntry { Action = new ScreenshotAction(), Status = "Off", Enabled = false });
+            form.RefreshActions();
+            DataGridView grid = (DataGridView)shell.GetControlFromPosition(0,3);
+            Assert(grid.Rows.Count == 3 && grid.ScrollBars == ScrollBars.None, "Additional actions use bounded pages instead of a panel scrollbar");
+            FlowLayoutPanel pagedFooter = (FlowLayoutPanel)shell.GetControlFromPosition(0,10);
+            Assert(pagedFooter.Controls.Cast<Control>().Where(control => control.Visible).All(control => control.Right <= pagedFooter.ClientSize.Width && control.Bottom <= pagedFooter.ClientSize.Height), "Pagination controls remain reachable");
+            form.Font = new Font(form.Font.FontFamily,20);
+            form.ClientSize = new Size(640,440);
+            form.PerformLayout(); shell.PerformLayout();
+            Assert(form.Font.SizeInPoints >= 20, "Explicitly enlarged text is preserved");
+            Assert(shell.Controls.Cast<Control>().All(control => control.Right <= shell.ClientSize.Width && control.Bottom <= shell.ClientSize.Height), "Native minimum dimensions grow to accommodate enlarged text");
+            form.Close();
+            Assert(!form.Visible && !form.IsDisposed && manager.Handle != IntPtr.Zero, "Closing the management window hides it while the hotkey manager remains alive");
+        }
     }
 
     private static void CheckClipboard(Bitmap crop)
