@@ -1,0 +1,8 @@
+build/
+dist/
+.tools/
+*.log
+*.tmp
+.vs/
+bin/
+obj/
